@@ -14,8 +14,8 @@ Private prescription credentials on Midnight. Hospital issues an anonymous commi
 - Contract version: MedProof v2
 - Contract address: `916ad8b74ead2c71bcfae68f63431ad2d8c5ececbf93e73be8f3f2f3b709c7c1`
 - CI workflow: [`.github/workflows/ci.yml`](.github/workflows/ci.yml)
-- Product X profile: **TODO — add public profile URL before submission**
-- One-minute demo video: **TODO — add video URL before submission**
+- Product X profile: [x.com/Medproof_](https://x.com/Medproof_)
+- MVP demo video: [Watch on Google Drive](https://drive.google.com/file/d/1aLBJQPQeKt6wSrIvZx74HYKiMfbXBm6u/view?usp=sharing)
 - Test-output screenshot: **TODO — add screenshot URL before Level 3 submission**
 
 The live URL returned HTTP `200` when checked on 9 August 2026. On-chain operations require 1AM configured for Midnight preprod.
@@ -223,7 +223,7 @@ Vercel hosts frontend. Production deployment remains managed through connected V
 - [x] More than 10 meaningful commits (`23` at documentation time)
 - [ ] Confirm first CI run is green after pushing workflow
 - [ ] Add test-output screenshot
-- [ ] Add one-minute demo video URL
+- [x] Demo video published
 - [ ] Add idea approval evidence URL, if available
 
 ### Level 4 — Waxing Gibbous
@@ -234,8 +234,8 @@ Vercel hosts frontend. Production deployment remains managed through connected V
 - [x] CI/CD workflow included
 - [x] More than 15 meaningful commits (`23` at documentation time)
 - [ ] Confirm first CI run is green after pushing workflow
-- [ ] Add product X profile URL
-- [ ] Add MVP demo video URL
+- [x] Product X profile published
+- [x] MVP demo video published
 
 Unchecked items need real external URLs or a passing remote run. They remain explicit to avoid fabricated submission evidence.
 
