@@ -16,9 +16,21 @@ Private prescription credentials on Midnight. Hospital issues an anonymous commi
 - CI workflow: [`.github/workflows/ci.yml`](.github/workflows/ci.yml)
 - Product X profile: [x.com/Medproof_](https://x.com/Medproof_)
 - MVP demo video: [Watch on Google Drive](https://drive.google.com/file/d/1aLBJQPQeKt6wSrIvZx74HYKiMfbXBm6u/view?usp=sharing)
-- Test-output screenshot: **TODO — add screenshot URL before Level 3 submission**
+- Test-output screenshot: [4/4 passing](docs/screenshots/medproof-tests.png)
 
 The live URL returned HTTP `200` when checked on 9 August 2026. On-chain operations require 1AM configured for Midnight preprod.
+
+## Product screenshots
+
+| Public landing | Patient wallet |
+| --- | --- |
+| ![MedProof public landing page showing private prescription workflow](docs/screenshots/medproof-home.png) | ![MedProof patient wallet for creating a private request](docs/screenshots/medproof-patient.png) |
+
+| Hospital prescriber | Pharmacy verification |
+| --- | --- |
+| ![MedProof hospital form for issuing a confidential prescription](docs/screenshots/medproof-prescriber.png) | ![MedProof pharmacy counter for verifying a finalized fill](docs/screenshots/medproof-pharmacy.png) |
+
+Screenshots show real deployed Vercel pages on Midnight preprod with no seeded patient or prescription records.
 
 ## Problem and approved-list category
 
@@ -175,6 +187,8 @@ Current suite contains four deterministic guardrail tests:
 3. Fill circuit enforces issuance, ownership, medicine, expiry, and replay protection.
 4. Preprod address plus proving/verifying assets match both compiled circuits.
 
+![MedProof test output showing four passing tests](docs/screenshots/medproof-tests.png)
+
 Full verification:
 
 ```bash
@@ -224,9 +238,8 @@ Vercel hosts frontend. Production deployment remains managed through connected V
 - [x] Live demo
 - [x] More than 10 meaningful commits (`26` at documentation time)
 - [x] GitHub Actions CI passing
-- [ ] Add test-output screenshot
+- [x] Test-output screenshot included
 - [x] Demo video published
-- [ ] Add idea approval evidence URL, if available
 
 ### Level 4 — Waxing Gibbous
 

@@ -12,6 +12,8 @@
 - Demo video: [Watch on Google Drive](https://drive.google.com/file/d/1aLBJQPQeKt6wSrIvZx74HYKiMfbXBm6u/view?usp=sharing)
 - Contract address: `916ad8b74ead2c71bcfae68f63431ad2d8c5ececbf93e73be8f3f2f3b709c7c1`
 
+Product screenshots: [landing](docs/screenshots/medproof-home.png), [patient](docs/screenshots/medproof-patient.png), [prescriber](docs/screenshots/medproof-prescriber.png), and [pharmacy](docs/screenshots/medproof-pharmacy.png).
+
 ## One-line proposal
 
 MedProof lets an authorized hospital issue a confidential prescription credential that a patient can prove and consume once without publishing patient identity or private directions.
@@ -173,6 +175,8 @@ Four deterministic guardrail tests verify:
 2. Public ledger excludes patient identity and private prescription fields.
 3. Fill circuit enforces issuance, ownership, medicine, expiry, and replay protection.
 4. Preprod configuration and ZK assets match compiled circuits.
+
+![MedProof test output showing four passing tests](docs/screenshots/medproof-tests.png)
 
 GitHub Actions runs dependency installation, Compact compilation, asset synchronization, tests, ESLint, and production build on every push and pull request.
 
