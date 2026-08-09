@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "npm run sync:assets && next dev --webpack",
-    "build": "npm run compile && npm run sync:assets && next build --webpack",
+    "build": "next build --webpack",
     "compile": "compact compile contract/MedProof.compact contract/managed/medproof",
     "sync:assets": "rm -rf public/zk/medproof && mkdir -p public/zk/medproof && cp -Rf contract/managed/medproof/keys public/zk/medproof/ && cp -Rf contract/managed/medproof/zkir public/zk/medproof/",
     "start": "next start",
