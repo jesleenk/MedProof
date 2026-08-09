@@ -30,6 +30,8 @@ Product proposal:
 
 > Build a privacy-first prescription workflow where an authorized hospital issues a credential to a patient, the patient proves eligibility without revealing identity or directions, and a pharmacy verifies a finalized one-time fill directly from Midnight.
 
+Full proposal: [`proposals.md`](proposals.md)
+
 Idea approval evidence: **TODO — add approval/submission URL if challenge reviewer requires it.**
 
 ## Real user flow
@@ -220,8 +222,8 @@ Vercel hosts frontend. Production deployment remains managed through connected V
 - [x] Complete setup, usage, and privacy documentation
 - [x] Public GitHub repository
 - [x] Live demo
-- [x] More than 10 meaningful commits (`23` at documentation time)
-- [ ] Confirm first CI run is green after pushing workflow
+- [x] More than 10 meaningful commits (`26` at documentation time)
+- [x] GitHub Actions CI passing
 - [ ] Add test-output screenshot
 - [x] Demo video published
 - [ ] Add idea approval evidence URL, if available
@@ -232,8 +234,8 @@ Vercel hosts frontend. Production deployment remains managed through connected V
 - [x] Verifiable contract address documented
 - [x] README setup and usage docs
 - [x] CI/CD workflow included
-- [x] More than 15 meaningful commits (`23` at documentation time)
-- [ ] Confirm first CI run is green after pushing workflow
+- [x] More than 15 meaningful commits (`26` at documentation time)
+- [x] GitHub Actions CI passing
 - [x] Product X profile published
 - [x] MVP demo video published
 
