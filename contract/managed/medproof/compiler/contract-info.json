@@ -16,24 +16,17 @@
           }
         },
         {
-          "name": "validFrom",
+          "name": "expiresAt",
           "type": {
             "type-name": "Uint",
             "maxval": 18446744073709551615
           }
         },
         {
-          "name": "validUntil",
-          "type": {
-            "type-name": "Uint",
-            "maxval": 18446744073709551615
-          }
-        },
-        {
-          "name": "encryptedDetails",
+          "name": "directionsHash",
           "type": {
             "type-name": "Bytes",
-            "length": 256
+            "length": 32
           }
         },
         {
@@ -50,61 +43,14 @@
       }
     },
     {
-      "name": "proveValidPrescription",
+      "name": "fillPrescription",
       "pure": false,
       "proof": true,
       "arguments": [
-        {
-          "name": "requestedDrugHash",
-          "type": {
-            "type-name": "Bytes",
-            "length": 32
-          }
-        }
       ],
       "result-type": {
-        "type-name": "Struct",
-        "name": "VerifyResult",
-        "elements": [
-          {
-            "name": "valid",
-            "type": {
-              "type-name": "Boolean"
-            }
-          },
-          {
-            "name": "drugHash",
-            "type": {
-              "type-name": "Bytes",
-              "length": 32
-            }
-          },
-          {
-            "name": "refillsRemaining",
-            "type": {
-              "type-name": "Uint",
-              "maxval": 255
-            }
-          }
-        ]
-      }
-    },
-    {
-      "name": "dispense",
-      "pure": false,
-      "proof": true,
-      "arguments": [
-        {
-          "name": "requestedDrugHash",
-          "type": {
-            "type-name": "Bytes",
-            "length": 32
-          }
-        }
-      ],
-      "result-type": {
-        "type-name": "Uint",
-        "maxval": 255
+        "type-name": "Bytes",
+        "length": 32
       }
     }
   ],
@@ -147,24 +93,17 @@
                   }
                 },
                 {
-                  "name": "validFrom",
+                  "name": "expiresAt",
                   "type": {
                     "type-name": "Uint",
                     "maxval": 18446744073709551615
                   }
                 },
                 {
-                  "name": "validUntil",
+                  "name": "directionsHash",
                   "type": {
-                    "type-name": "Uint",
-                    "maxval": 18446744073709551615
-                  }
-                },
-                {
-                  "name": "refillsTotal",
-                  "type": {
-                    "type-name": "Uint",
-                    "maxval": 255
+                    "type-name": "Bytes",
+                    "length": 32
                   }
                 }
               ]
@@ -269,8 +208,18 @@
       }
     },
     {
-      "name": "issuedPrescriptions",
+      "name": "version",
       "index": 2,
+      "exported": true,
+      "storage": "Cell",
+      "type": {
+        "type-name": "Uint",
+        "maxval": 65535
+      }
+    },
+    {
+      "name": "prescriptions",
+      "index": 3,
       "exported": true,
       "storage": "HistoricMerkleTree",
       "depth": 20,
@@ -280,21 +229,7 @@
       }
     },
     {
-      "name": "encryptedPrescriptions",
-      "index": 3,
-      "exported": true,
-      "storage": "Map",
-      "key": {
-        "type-name": "Bytes",
-        "length": 32
-      },
-      "value": {
-        "type-name": "Bytes",
-        "length": 256
-      }
-    },
-    {
-      "name": "usedDispenses",
+      "name": "filledPrescriptions",
       "index": 4,
       "exported": true,
       "storage": "Set",

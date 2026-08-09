@@ -2,28 +2,18 @@ pragma language_version 0.23.0;
 
 import CompactStandardLibrary;
 
-// MedProof — private prescription verification demo.
+// MedProof v2 — one anonymous prescription, one private fill.
 //
-// Public ledger data:
-//   * random prescription commitments;
-//   * patient-encrypted prescription ciphertext;
-//   * unlinkable, one-time dispense nullifiers.
-//
-// Patient identity, diagnosis, doctor name, dosage history, and plaintext
-// medicine details never enter public state. Validity bounds are not returned
-// to the pharmacist, but Compact's trusted block-time predicates require their
-// protocol-level disclosure; this is acknowledged explicitly below. Ciphertext is
-// encrypted by the app for the patient's wallet before issuePrescription is
-// called. Compact verifies commitments; it does not perform that encryption.
+// Public state contains only prescription commitments and spent nullifiers.
+// Patient identity, directions, dates, and doctor identity never enter ledger
+// state. Directions are encrypted doctor-to-patient by the application; their
+// hash is committed so the received package cannot be changed unnoticed.
 
-// Small demo scope: one supported medicine and one authorized dispense.
-// refillsTotal remains committed so proof explicitly verifies availability.
 struct PrescriptionCriteria {
   patientCommit: Bytes<32>;
   drugHash: Bytes<32>;
-  validFrom: Uint<64>;
-  validUntil: Uint<64>;
-  refillsTotal: Uint<8>;
+  expiresAt: Uint<64>;
+  directionsHash: Bytes<32>;
 }
 
 struct PrescriptionCredential {
@@ -34,146 +24,78 @@ struct PrescriptionCredential {
   prescriptionPath: MerkleTreePath<20, Bytes<32>>;
 }
 
-// Pharmacist UI maps supportedDrugHash to configured medicine name. No doctor,
-// diagnosis, patient, dates, or other-medication fields are returned.
-struct VerifyResult {
-  valid: Boolean;
-  drugHash: Bytes<32>;
-  refillsRemaining: Uint<8>;
-}
-
 export ledger doctorPk: Bytes<32>;
-
 export ledger supportedDrugHash: Bytes<32>;
-
-export ledger issuedPrescriptions: HistoricMerkleTree<20, Bytes<32>>;
-
-export ledger encryptedPrescriptions: Map<Bytes<32>, Bytes<256>>;
-
-export ledger usedDispenses: Set<Bytes<32>>;
+export ledger version: Uint<16>;
+export ledger prescriptions: HistoricMerkleTree<20, Bytes<32>>;
+export ledger filledPrescriptions: Set<Bytes<32>>;
 
 constructor(doctorSecret: Bytes<32>, drugHash: Bytes<32>) {
   doctorPk = disclose(doctorKey(doctorSecret));
   supportedDrugHash = disclose(drugHash);
+  version = 2;
 }
 
-// Private inputs supplied locally by wallet/provider implementations.
 witness doctorSecretKey(): Bytes<32>;
-
 witness prescriptionCredential(): PrescriptionCredential;
 
 circuit doctorKey(secret: Bytes<32>): Bytes<32> {
-  return persistentHash<Vector<2, Bytes<32>>>([pad(32, "medproof:doctor"), secret]);
+  return persistentHash<Vector<2, Bytes<32>>>([pad(32, "medproof:doctor:v2"), secret]);
 }
 
 circuit patientCommitment(secret: Bytes<32>, nonce: Bytes<32>): Bytes<32> {
-  return persistentCommit<Vector<2, Bytes<32>>>([pad(32, "medproof:patient"), secret], nonce);
+  return persistentCommit<Vector<2, Bytes<32>>>([pad(32, "medproof:patient:v2"), secret], nonce);
 }
 
 circuit prescriptionId(criteria: PrescriptionCriteria, nonce: Bytes<32>): Bytes<32> {
   return persistentCommit<PrescriptionCriteria>(criteria, nonce);
 }
 
-// Nullifier uses patient-only secret as commitment opening. Doctor knows the
-// prescription id but cannot derive or link this dispense marker.
-circuit dispenseNullifier(id: Bytes<32>, patientSecret: Bytes<32>): Bytes<32> {
-  return persistentCommit<Vector<2, Bytes<32>>>([pad(32, "medproof:dispense"), id], patientSecret);
+circuit fillNullifier(id: Bytes<32>, patientSecret: Bytes<32>): Bytes<32> {
+  return persistentCommit<Vector<2, Bytes<32>>>([pad(32, "medproof:fill:v2"), id], patientSecret);
 }
 
-circuit credentialMatches(id: Bytes<32>, credential: PrescriptionCredential): Boolean {
-  const correctId = prescriptionId(credential.criteria, credential.prescriptionNonce) == id;
-  const correctPatient =
-          patientCommitment(credential.patientSecret, credential.patientNonce) ==
-          credential.criteria.patientCommit;
-  const correctDrug = credential.criteria.drugHash == supportedDrugHash;
-  const demoRefillPolicy = credential.criteria.refillsTotal == 1;
-
-  return correctId && correctPatient && correctDrug && demoRefillPolicy;
-}
-
-circuit currentlyValid(criteria: PrescriptionCriteria): Boolean {
-  return blockTimeGte(disclose(criteria.validFrom)) && blockTimeLte(disclose(criteria.validUntil));
-}
-
-circuit authorizedDoctor(): Boolean {
-  return doctorKey(doctorSecretKey()) == doctorPk;
-}
-
-// Doctor issues commitment plus patient-encrypted payload. Criteria arguments
-// stay private; only random commitment id and ciphertext reach public ledger.
 export circuit issuePrescription(
-                 patientCommit: Bytes<32>,
-                 validFrom: Uint<64>,
-                 validUntil: Uint<64>,
-                 encryptedDetails: Bytes<256>,
-                 prescriptionNonce: Bytes<32>
-                 ): Bytes<32> {
-  assert(disclose(authorizedDoctor()), "issuePrescription: not authorized doctor");
-  assert(disclose(validUntil > validFrom), "issuePrescription: bad validity window");
+  patientCommit: Bytes<32>,
+  expiresAt: Uint<64>,
+  directionsHash: Bytes<32>,
+  prescriptionNonce: Bytes<32>
+): Bytes<32> {
+  assert(disclose(doctorKey(doctorSecretKey()) == doctorPk), "issuePrescription: unauthorized wallet");
+  assert(blockTimeLte(disclose(expiresAt)), "issuePrescription: expiry is in the past");
 
-  const criteria =
-          PrescriptionCriteria { patientCommit: patientCommit,
-                                 drugHash: supportedDrugHash,
-                                 validFrom: validFrom,
-                                 validUntil: validUntil,
-                                 refillsTotal: 1 };
+  const criteria = PrescriptionCriteria {
+    patientCommit: patientCommit,
+    drugHash: supportedDrugHash,
+    expiresAt: expiresAt,
+    directionsHash: directionsHash
+  };
   const id = prescriptionId(criteria, prescriptionNonce);
-
-  assert(!encryptedPrescriptions.member(id), "issuePrescription: duplicate id");
-  issuedPrescriptions.insert(id);
-  encryptedPrescriptions.insert(id, disclose(encryptedDetails));
-
+  prescriptions.insert(id);
   return id;
 }
 
-// Patient wallet generates proof. Caller supplies medicine requested by
-// pharmacist; contract proves committed medicine matches without returning
-// patient, dates, doctor, diagnosis, or ciphertext plaintext.
-export circuit proveValidPrescription(requestedDrugHash: Bytes<32>): VerifyResult {
-  const publicRequestedDrugHash = disclose(requestedDrugHash);
+// Successful finality proves prescription was issued, belongs to patient,
+// matches configured medicine, is unexpired, and has not been filled before.
+// Same transaction records one-time nullifier, so proof and fill cannot drift.
+export circuit fillPrescription(): Bytes<32> {
   const credential = prescriptionCredential();
   const id = prescriptionId(credential.criteria, credential.prescriptionNonce);
   const root = merkleTreePathRoot<20, Bytes<32>>(credential.prescriptionPath);
-  // Historic root is public; path and leaf remain private.
-  const issued = issuedPrescriptions.checkRoot(disclose(root));
+  const issued = prescriptions.checkRoot(disclose(root));
   const correctLeaf = credential.prescriptionPath.leaf == id;
-  const nullifier = dispenseNullifier(id, credential.patientSecret);
-  const available = !usedDispenses.member(nullifier);
-  // Compute effectful checks unconditionally. Short-circuiting private booleans
-  // around block-time or ledger operations creates unintended control leakage.
-  const matchesCredential = credentialMatches(id, credential);
-  const matchesDrug = publicRequestedDrugHash == supportedDrugHash;
-  const inWindow = currentlyValid(credential.criteria);
-  const valid = issued && correctLeaf && matchesCredential && matchesDrug && inWindow && available;
+  const correctPatient =
+    patientCommitment(credential.patientSecret, credential.patientNonce) == credential.criteria.patientCommit;
+  const correctDrug = credential.criteria.drugHash == supportedDrugHash;
+  const notExpired = blockTimeLte(disclose(credential.criteria.expiresAt));
+  const nullifier = fillNullifier(id, credential.patientSecret);
 
-  if (disclose(valid)) {
-    return VerifyResult { valid: true, drugHash: supportedDrugHash, refillsRemaining: 1 };
-  } else {
-    return VerifyResult { valid: false, drugHash: publicRequestedDrugHash, refillsRemaining: 0 };
-  }
-}
+  assert(disclose(issued && correctLeaf), "fillPrescription: unknown prescription");
+  assert(disclose(correctPatient), "fillPrescription: wrong patient");
+  assert(disclose(correctDrug), "fillPrescription: wrong medicine");
+  assert(disclose(notExpired), "fillPrescription: expired");
+  assert(!filledPrescriptions.member(nullifier), "fillPrescription: already filled");
 
-// Patient authorizes dispense from own device by supplying private credential.
-// Contract re-checks every condition, then records one unlinkable nullifier.
-// Replays and double fills fail because same nullifier cannot be inserted twice.
-export circuit dispense(requestedDrugHash: Bytes<32>): Uint<8> {
-  const publicRequestedDrugHash = disclose(requestedDrugHash);
-  const credential = prescriptionCredential();
-  const id = prescriptionId(credential.criteria, credential.prescriptionNonce);
-  const root = merkleTreePathRoot<20, Bytes<32>>(credential.prescriptionPath);
-  // Historic root is public; path and leaf remain private.
-  const issued = issuedPrescriptions.checkRoot(disclose(root));
-  const correctLeaf = credential.prescriptionPath.leaf == id;
-
-  assert(disclose(issued && correctLeaf), "dispense: unknown prescription");
-  assert(disclose(credentialMatches(id, credential)), "dispense: invalid credential");
-  assert(publicRequestedDrugHash == supportedDrugHash, "dispense: wrong medicine");
-  assert(disclose(currentlyValid(credential.criteria)), "dispense: outside valid window");
-
-  const nullifier = dispenseNullifier(id, credential.patientSecret);
-  assert(!usedDispenses.member(nullifier), "dispense: already filled");
-  usedDispenses.insert(nullifier);
-
-  // Explicit on-chain refill state transition: remaining 1 -> 0.
-  return 0;
+  filledPrescriptions.insert(nullifier);
+  return supportedDrugHash;
 }

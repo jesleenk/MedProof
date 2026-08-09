@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { deployMedProof } from "@/lib/deploy-medproof";
-import { MEDPROOF_DEPLOYMENT } from "@/lib/deployment";
+import { configuredContractAddress, MEDPROOF_DEPLOYMENT, saveLocalContractAddress } from "@/lib/deployment";
 import {
   connectOneAmPreprod,
   detectOneAmWallet,
@@ -12,25 +12,25 @@ import {
   type ConnectedSession,
 } from "@/lib/midnight";
 
-const DEPLOYED_ADDRESS_KEY = "medproof:preprod:contract-address";
-const DEPLOY_CONFIRMED_KEY = "medproof:preprod:deployment-confirmed";
-
 export default function DeployPage() {
   const [walletInstalled, setWalletInstalled] = useState<boolean | null>(null);
   const [session, setSession] = useState<ConnectedSession | null>(null);
   const [contractAddress, setContractAddress] = useState<string>(MEDPROOF_DEPLOYMENT.contractAddress);
-  const [status, setStatus] = useState("Configured deployment confirmed on preprod");
+  const [status, setStatus] = useState(MEDPROOF_DEPLOYMENT.contractAddress ? "Configured contract address loaded" : "Deployment required for MedProof v2");
   const [error, setError] = useState("");
   const [connecting, setConnecting] = useState(false);
   const [deploying, setDeploying] = useState(false);
-  const [confirmed, setConfirmed] = useState(true);
+  const [confirmed, setConfirmed] = useState(false);
   const mounted = useRef(true);
 
   useEffect(() => {
     mounted.current = true;
     const frame = window.requestAnimationFrame(() => {
-      window.localStorage.setItem(DEPLOYED_ADDRESS_KEY, MEDPROOF_DEPLOYMENT.contractAddress);
-      window.localStorage.setItem(DEPLOY_CONFIRMED_KEY, "true");
+      const configuredAddress = configuredContractAddress();
+      if (configuredAddress) {
+        setContractAddress(configuredAddress);
+        setStatus("Configured contract address loaded");
+      }
       detectOneAmWallet().then((wallet) => {
         if (mounted.current) setWalletInstalled(wallet !== null);
       });
@@ -49,7 +49,15 @@ export default function DeployPage() {
       const connected = await connectOneAmPreprod();
       if (!mounted.current) return;
       setSession(connected);
-      setStatus("Wallet connected to preprod");
+      const configuredAddress = configuredContractAddress();
+      if (configuredAddress) {
+        const state = await connected.providers.publicDataProvider.queryContractState(configuredAddress);
+        if (!mounted.current) return;
+        setConfirmed(Boolean(state));
+        setStatus(state ? "Configured deployment confirmed on preprod" : "Configured address not found on preprod");
+      } else {
+        setStatus("Wallet connected. Ready to deploy current contract.");
+      }
     } catch (caught) {
       if (mounted.current) {
         setError(caught instanceof Error ? caught.message : "Wallet connection failed.");
@@ -64,21 +72,19 @@ export default function DeployPage() {
     if (!session) return;
     setDeploying(true);
     setConfirmed(false);
-    window.localStorage.removeItem(DEPLOY_CONFIRMED_KEY);
     setError("");
     setStatus("Creating deployment transaction…");
     try {
       const address = await deployMedProof(session);
       if (!mounted.current) return;
       setContractAddress(address);
-      window.localStorage.setItem(DEPLOYED_ADDRESS_KEY, address);
       setStatus("Submitted. Waiting for preprod indexer…");
       await pollForContractState(session.config.indexerUri, address, (attempt) => {
         if (mounted.current) setStatus(`Waiting for preprod indexer · attempt ${attempt}`);
       });
       if (!mounted.current) return;
       setConfirmed(true);
-      window.localStorage.setItem(DEPLOY_CONFIRMED_KEY, "true");
+      saveLocalContractAddress(address);
       setStatus("Deployment confirmed on preprod");
     } catch (caught) {
       if (mounted.current) {
@@ -100,25 +106,25 @@ export default function DeployPage() {
       <main className="deploy-page">
         <section className="deploy-intro">
           <p className="eyebrow">Contract deployment</p>
-          <h1>Deploy MedProof<br />through 1AM.</h1>
-          <p>Browser extension creates proof, balances transaction through ProofStation, and submits directly to Midnight preprod.</p>
+          <h1>Deploy MedProof v2.</h1>
+          <p>Current ProofStation generates proof. 1AM approves, sponsors, balances, and submits to Midnight preprod.</p>
           <div className="deploy-guardrails">
             <span>Network</span><strong>Midnight preprod</strong>
             <span>Signer</span><strong>Connected 1AM wallet</strong>
-            <span>Proving</span><strong>1AM provider</strong>
+            <span>Proving</span><strong>ProofStation HTTP</strong>
             <span>Server deployer</span><strong>None</strong>
           </div>
         </section>
 
         <section className="deploy-console">
           <div className="console-header">
-            <div><p className="eyebrow">Deployment console</p><h2>MedProof.compact</h2></div>
+            <div><p className="eyebrow">Fresh deployment</p><h2>MedProof v2 · two circuits</h2></div>
             <span className="preprod-chip"><i /> {MIDNIGHT_NETWORK_ID}</span>
           </div>
 
           <ol className="deploy-steps">
             <li className={session || confirmed ? "complete" : "current"}><span>1</span><div><strong>Connect wallet</strong><p>Authorize 1AM browser extension on preprod.</p></div></li>
-            <li className={deploying ? "current" : confirmed ? "complete" : ""}><span>2</span><div><strong>Prove and submit</strong><p>Wallet provider proves, balances, and submits deployment.</p></div></li>
+            <li className={deploying ? "current" : confirmed ? "complete" : ""}><span>2</span><div><strong>Prove and submit</strong><p>ProofStation proves. 1AM balances and submits deployment.</p></div></li>
             <li className={confirmed ? "complete" : ""}><span>3</span><div><strong>Confirm address</strong><p>Indexer confirms contract state and address stays visible.</p></div></li>
           </ol>
 
@@ -141,7 +147,7 @@ export default function DeployPage() {
               <small>Connected wallet</small>
               <code>{session.unshieldedAddress}</code>
               <button className="button primary deploy-action" onClick={deploy} disabled={deploying}>
-                {deploying ? status : "Deploy MedProof contract"}
+                {deploying ? status : "Deploy MedProof v2"}
               </button>
             </div>
           )}
@@ -151,6 +157,14 @@ export default function DeployPage() {
               <div><span>{confirmed ? "Official preprod contract" : "Submitted contract address"}</span><strong>{confirmed ? "Deployment live" : "Awaiting indexer confirmation"}</strong></div>
               <code>{contractAddress}</code>
               <button onClick={copyAddress}>Copy address</button>
+            </div>
+          )}
+
+          {confirmed && (
+            <div className="config-instruction">
+              <strong>Activate this deployment</strong>
+              <p>Activated in this browser. Production deployment should pin same address with environment variable.</p>
+              <code>NEXT_PUBLIC_MEDPROOF_CONTRACT_ADDRESS={contractAddress}</code>
             </div>
           )}
 

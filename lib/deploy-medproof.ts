@@ -9,6 +9,8 @@ import { MIDNIGHT_NETWORK_ID, type ConnectedSession } from "@/lib/midnight";
 export const PRIVATE_STATE_ID = "medproofPrivateState";
 export const MEDICINE_IDENTIFIER = "medproof:medicine:methylphenidate-10mg";
 
+const doctorSecrets = new WeakMap<ConnectedSession, Uint8Array>();
+
 const deployOnlyWitnesses = {
   doctorSecretKey: () => {
     throw new Error("doctorSecretKey witness is unavailable during deployment.");
@@ -30,11 +32,15 @@ export async function sha256(value: string): Promise<Uint8Array> {
 }
 
 export async function doctorSecret(session: ConnectedSession): Promise<Uint8Array> {
+  const cached = doctorSecrets.get(session);
+  if (cached) return cached;
   const signature = await session.api.signData(
-    `medproof:doctor-authority|${MIDNIGHT_NETWORK_ID}`,
+    `medproof:doctor-authority:v2|${MIDNIGHT_NETWORK_ID}`,
     { encoding: "text" },
   );
-  return sha256(signature);
+  const secret = await sha256(`medproof:doctor-secret:v2|${signature}`);
+  doctorSecrets.set(session, secret);
+  return secret;
 }
 
 export async function deployMedProof(session: ConnectedSession): Promise<string> {

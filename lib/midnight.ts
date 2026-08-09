@@ -3,9 +3,10 @@
 import { ContractState } from "@midnight-ntwrk/compact-runtime";
 import { LedgerParameters, ZswapChainState } from "@midnight-ntwrk/ledger-v8";
 import { indexerPublicDataProvider } from "@midnight-ntwrk/midnight-js-indexer-public-data-provider";
+import { httpClientProofProvider } from "@midnight-ntwrk/midnight-js-http-client-proof-provider";
 import { setNetworkId } from "@midnight-ntwrk/midnight-js-network-id";
 import { FetchZkConfigProvider } from "@midnight-ntwrk/midnight-js-fetch-zk-config-provider";
-import type { MidnightProvider, WalletProvider } from "@midnight-ntwrk/midnight-js-types";
+import type { MidnightProvider, ProofProvider, WalletProvider } from "@midnight-ntwrk/midnight-js-types";
 import { MEDPROOF_DEPLOYMENT } from "@/lib/deployment";
 
 export const MIDNIGHT_NETWORK_ID = MEDPROOF_DEPLOYMENT.network;
@@ -20,13 +21,13 @@ type OneAmApi = {
     networkId: string;
     indexerUri: string;
     indexerWsUri: string;
+    proverServerUri: string;
   }>;
   getUnshieldedAddress(): Promise<{ unshieldedAddress: string }>;
   getShieldedAddresses(): Promise<{
     shieldedCoinPublicKey: string;
     shieldedEncryptionPublicKey: string;
   }>;
-  getProvingProvider(provider: unknown): Promise<unknown>;
   balanceUnsealedTransaction(tx: string): Promise<{ tx: string }>;
   submitTransaction(tx: string): Promise<string | { transactionId?: string; id?: string } | undefined>;
   signData(data: string, options: { encoding: "text" }): Promise<string>;
@@ -45,7 +46,7 @@ export type ConnectedSession = {
     privateStateProvider: ReturnType<typeof createPrivateStateProvider>;
     publicDataProvider: ReturnType<typeof createPatchedPublicDataProvider>;
     zkConfigProvider: FetchZkConfigProvider<never>;
-    proofProvider: { proveTx(unprovenTx: unknown): Promise<unknown> };
+    proofProvider: ProofProvider;
     walletProvider: WalletProvider;
     midnightProvider: MidnightProvider;
   };
@@ -58,7 +59,7 @@ export function toHex(bytes: Uint8Array): string {
 
 export function fromHex(hex: string): Uint8Array {
   const normalized = hex.startsWith("0x") ? hex.slice(2) : hex;
-  if (normalized.length % 2 !== 0) throw new Error("Invalid hex string from wallet.");
+  if (normalized.length % 2 !== 0 || !/^[0-9a-f]*$/i.test(normalized)) throw new Error("Invalid hex string from wallet.");
   const bytes = new Uint8Array(normalized.length / 2);
   for (let index = 0; index < normalized.length; index += 2) {
     bytes[index / 2] = Number.parseInt(normalized.slice(index, index + 2), 16);
@@ -149,6 +150,10 @@ function createPatchedPublicDataProvider(queryUrl: string, subscriptionUrl: stri
   };
 }
 
+export function createPreprodPublicDataProvider() {
+  return createPatchedPublicDataProvider(MEDPROOF_DEPLOYMENT.indexerUri, MEDPROOF_DEPLOYMENT.indexerWsUri);
+}
+
 export async function connectOneAmPreprod(): Promise<ConnectedSession> {
   setNetworkId(MIDNIGHT_NETWORK_ID);
   const wallet = await detectOneAmWallet();
@@ -169,14 +174,10 @@ export async function connectOneAmPreprod(): Promise<ConnectedSession> {
     new URL(MEDPROOF_ZK_ASSET_PATH, window.location.origin).toString(),
     window.fetch.bind(window),
   );
-  const provingProvider = await api.getProvingProvider(zkConfigProvider);
-  const proofProvider = {
-    async proveTx(unprovenTx: unknown) {
-      const { CostModel } = await import("@midnight-ntwrk/ledger-v8");
-      return (unprovenTx as { prove(provider: unknown, model: unknown): Promise<unknown> })
-        .prove(provingProvider, CostModel.initialCostModel());
-    },
-  };
+  if (!config.proverServerUri) {
+    throw new Error("1AM did not provide its ProofStation URL. Update 1AM and reconnect.");
+  }
+  const proofProvider = httpClientProofProvider(config.proverServerUri, zkConfigProvider);
   const walletProvider: WalletProvider = {
     getCoinPublicKey: () => shieldedAddress.shieldedCoinPublicKey,
     getEncryptionPublicKey: () => shieldedAddress.shieldedEncryptionPublicKey,
@@ -188,13 +189,15 @@ export async function connectOneAmPreprod(): Promise<ConnectedSession> {
     },
   } as WalletProvider;
   const midnightProvider: MidnightProvider = {
-    submitTx: async (transaction: { serialize(): Uint8Array }) => {
+    submitTx: async (transaction: { serialize(): Uint8Array; identifiers(): string[] }) => {
       const transactionHex = toHex(transaction.serialize());
+      const canonicalTxId = transaction.identifiers()[0];
       const result = await api.submitTransaction(transactionHex);
       if (typeof result === "string" && result) return result;
       if (result && typeof result === "object" && result.transactionId) return result.transactionId;
       if (result && typeof result === "object" && result.id) return result.id;
-      return transactionHex.slice(0, 64);
+      if (canonicalTxId) return canonicalTxId;
+      throw new Error("Submitted transaction has no canonical Midnight identifier.");
     },
   } as MidnightProvider;
 

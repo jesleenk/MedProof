@@ -2,20 +2,25 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import { Brand } from "@/components/Brand";
-import { MEDPROOF_DEPLOYMENT, shortContractAddress } from "@/lib/deployment";
+import { configuredContractAddress, MEDPROOF_DEPLOYMENT, shortContractAddress } from "@/lib/deployment";
 import { useWallet } from "@/hooks/useWallet";
 
 const items = [
-  { href: "/doctor/issue", label: "Issue", scope: "Doctor" },
-  { href: "/wallet", label: "Wallet", scope: "Patient" },
-  { href: "/pharmacy", label: "Verify", scope: "Pharmacy" },
-  { href: "/deploy", label: "Deploy", scope: "Preprod" },
+  { href: "/doctor/issue", label: "Prescriber", scope: "Hospital" },
+  { href: "/wallet", label: "Patient", scope: "Private" },
+  { href: "/pharmacy", label: "Pharmacy", scope: "Counter" },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const wallet = useWallet();
+  const [contractAddress, setContractAddress] = useState(MEDPROOF_DEPLOYMENT.contractAddress);
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => setContractAddress(configuredContractAddress()));
+    return () => window.cancelAnimationFrame(frame);
+  }, [pathname]);
 
   return (
     <div className="app-frame">
@@ -29,12 +34,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           ))}
         </nav>
         <div className="header-actions">
-          <Link className="network" href="/deploy" title={`Contract ${MEDPROOF_DEPLOYMENT.contractAddress}`}>
-            <i /> Preprod · {shortContractAddress()}
+          <Link className="network" href="/deploy" title={contractAddress ? `Contract ${contractAddress}` : "Deploy MedProof v2"}>
+            <i /> Preprod · {shortContractAddress(contractAddress)}
           </Link>
-          <button className={`wallet-connect ${wallet.connected ? "connected" : ""}`} onClick={wallet.connectWallet} disabled={wallet.operation !== "idle"}>
-            {wallet.connected ? `${wallet.walletAddress?.slice(0, 7)}…${wallet.walletAddress?.slice(-5)}` : wallet.operation === "connecting" ? "Connecting…" : "Connect 1AM"}
-          </button>
+          {pathname !== "/pharmacy" && <button className={`wallet-connect ${wallet.connected ? "connected" : ""}`} onClick={wallet.connectWallet} disabled={wallet.operation !== "idle"}>
+            {wallet.connected ? `1AM · ${wallet.walletAddress?.slice(-6)}` : wallet.operation === "connecting" ? "Connecting…" : "Connect 1AM"}
+          </button>}
         </div>
       </header>
       {children}
